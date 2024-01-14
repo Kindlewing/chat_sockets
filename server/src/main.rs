@@ -1,4 +1,4 @@
-use std::net::{TcpListener, TcpStream};
+use std::net::{IpAddr, Ipv4Addr, TcpListener, TcpStream};
 use std::sync::{
     mpsc,
     mpsc::{Receiver, Sender},
@@ -21,4 +21,10 @@ fn main() {
     }
 }
 
-fn handle_client_connection(mut stream: TcpStream) {}
+fn handle_client_connection(mut stream: TcpStream) {
+    let client_ip: IpAddr = match stream.peer_addr() {
+        Ok(addr) => addr.ip(),
+        Err(_) => panic!("There was an error"),
+    };
+    print!("Recieved a connection from {}", client_ip);
+}
