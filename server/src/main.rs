@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::{IpAddr, Ipv4Addr, TcpListener, TcpStream};
 use std::sync::{
     mpsc,
@@ -28,6 +28,10 @@ fn handle_client_connection(mut stream: TcpStream) {
         Err(_) => panic!("There was an error"),
     };
     println!("Recieved a connection from {}", client_ip);
-    let buffer = "Hello from server!".as_bytes();
-    stream.write_all(buffer).unwrap();
+    let mut buffer: [u8; 1024] = [0; 1024];
+    stream
+        .read(&mut buffer)
+        .expect("Failed to read from client!");
+    let request = String::from_utf8_lossy(&buffer[..]);
+    println!("{}", request);
 }
