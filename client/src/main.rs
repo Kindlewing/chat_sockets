@@ -22,4 +22,8 @@ fn chat_loop(mut stream: &TcpStream) {
     reader
         .read_until(b'\n', &mut server_buffer)
         .expect("Couldn't read from server");
+    print!(
+        "{}",
+        std::str::from_utf8(&server_buffer).expect("Could not write buffer as string")
+    );
 }

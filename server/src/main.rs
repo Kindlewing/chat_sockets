@@ -26,12 +26,17 @@ fn main() {
 
 fn handle_client_connection(mut stream: TcpStream) -> std::io::Result<()> {
     println!("Incoming connection from client {}", stream.peer_addr()?);
-    let mut buffer: [u8; 1024] = [0; 1024];
+    let mut buffer: [u8; 512] = [0; 512];
     loop {
         let bytes_read: usize = stream.read(&mut buffer)?;
         if bytes_read == 0 {
             return Ok(());
         }
-        stream.write(&mut buffer[..bytes_read]);
+        let msg = match std::str::from_utf8(&buffer[..bytes_read]) {
+            Ok(s) => s,
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        };
+        println!("{:?}", msg);
+        stream.write(&buffer[..bytes_read]);
     }
 }
