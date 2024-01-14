@@ -1,3 +1,5 @@
+use std::error::Error;
+use std::fmt::write;
 use std::io::{Read, Write};
 use std::net::{IpAddr, Ipv4Addr, TcpListener, TcpStream};
 use std::sync::{
@@ -22,16 +24,14 @@ fn main() {
     }
 }
 
-fn handle_client_connection(mut stream: TcpStream) {
-    let client_ip: IpAddr = match stream.peer_addr() {
-        Ok(addr) => addr.ip(),
-        Err(_) => panic!("There was an error"),
-    };
-    println!("Recieved a connection from {}", client_ip);
+fn handle_client_connection(mut stream: TcpStream) -> std::io::Result<()> {
+    println!("Incoming connection from client {}", stream.peer_addr()?);
     let mut buffer: [u8; 1024] = [0; 1024];
-    stream
-        .read(&mut buffer)
-        .expect("Failed to read from client!");
-    let request = String::from_utf8_lossy(&buffer[..]);
-    println!("{}", request);
+    loop {
+        let bytes_read: usize = stream.read(&mut buffer)?;
+        if bytes_read == 0 {
+            return Ok(());
+        }
+        stream.write(&mut buffer[..bytes_read]);
+    }
 }
