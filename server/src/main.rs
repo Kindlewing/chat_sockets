@@ -1,15 +1,14 @@
-use std::error::Error;
-use std::fmt::write;
 use std::io::{Read, Write};
-use std::net::{IpAddr, Ipv4Addr, TcpListener, TcpStream};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::{
     mpsc,
     mpsc::{Receiver, Sender},
 };
 
 fn main() {
-    let listener = TcpListener::bind("127.0.0.1:5555").expect("Failed to bind to address");
-    println!("Server listening on 127.0.0.1:5555");
+    let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 5555);
+    let listener = TcpListener::bind(socket).expect("Failed to bind to address");
+    println!("Server listening on {}:{}", socket.ip(), socket.port());
     let (sender, receiver): (Sender<String>, Receiver<String>) = mpsc::channel();
 
     for stream in listener.incoming() {
@@ -26,7 +25,7 @@ fn main() {
 
 fn handle_client_connection(mut stream: TcpStream) -> std::io::Result<()> {
     println!("Incoming connection from client {}", stream.peer_addr()?);
-    let mut buffer: [u8; 512] = [0; 512];
+    let mut buffer: [u8; 1024] = [0; 1024];
     loop {
         let bytes_read: usize = stream.read(&mut buffer)?;
         if bytes_read == 0 {
@@ -37,6 +36,6 @@ fn handle_client_connection(mut stream: TcpStream) -> std::io::Result<()> {
             Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
         };
         println!("{:?}", msg);
-        stream.write(&buffer[..bytes_read]);
+        let _ = stream.write(&buffer[..bytes_read]);
     }
 }
