@@ -14,8 +14,8 @@ fn handle_connection(
     chan: Sender<String>,
     arc: Arc<RwLock<Vec<String>>>,
 ) -> std::io::Result<()> {
-    stream.write(b"Welcome to Simple Chat Server!\n").unwrap();
-    stream.write(b"Plz input yourname: ").unwrap();
+    stream.write(b"Welcome to Simple Chat Server!\n")?;
+    stream.write(b"Please input yourname: ")?;
     stream.flush()?;
     let mut name = String::new();
     stream.read_line(&mut name).unwrap();
@@ -28,6 +28,7 @@ fn handle_connection(
     let mut pos = 0;
     loop {
         {
+            println!("Inside chat loop");
             let lines = arc.read().unwrap();
             println!("DEBUG arc.read() => {:?}", lines);
             for i in pos..lines.len() {
@@ -57,10 +58,12 @@ fn main() {
 
     let arc_w = arc.clone();
 
+    println!("Spawning thread");
     std::thread::spawn(move || {
+        println!("Inside thread 1!");
         loop {
             let msg = recv.recv().unwrap();
-            print!("DEBUG: msg {}", msg);
+            println!("DEBUG: msg {}", msg);
             {
                 let mut arc_w = arc_w.write().unwrap();
                 arc_w.push(msg);
@@ -80,7 +83,7 @@ fn main() {
                 let arc = arc.clone();
                 std::thread::spawn(move || {
                     let mut stream = BufStream::new(stream);
-                    handle_connection(&mut stream, send, arc);
+                    let _ = handle_connection(&mut stream, send, arc);
                 });
             }
             Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
