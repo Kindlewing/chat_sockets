@@ -1,43 +1,93 @@
-use std::io::{Read, Write};
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream},
-    sync::{
-        mpsc,
-        mpsc::{Receiver, Sender},
-    },
+use bufstream::BufStream;
+use std::io::ErrorKind;
+use std::io::{BufRead, Write};
+use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::str::FromStr;
+use std::sync::{
+    mpsc,
+    mpsc::{Receiver, Sender},
+    Arc, RwLock,
 };
 
-fn main() {
-    let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 5555);
-    let listener = TcpListener::bind(socket).expect("Failed to bind to address");
-    println!("Server listening on {}:{}", socket.ip(), socket.port());
-    let (sender, receiver): (Sender<String>, Receiver<String>) = mpsc::channel();
+fn handle_connection(
+    stream: &mut BufStream<TcpStream>,
+    chan: Sender<String>,
+    arc: Arc<RwLock<Vec<String>>>,
+) -> std::io::Result<()> {
+    stream.write(b"Welcome to Simple Chat Server!\n").unwrap();
+    stream.write(b"Plz input yourname: ").unwrap();
+    stream.flush()?;
+    let mut name = String::new();
+    stream.read_line(&mut name).unwrap();
+    let name = name.trim_end();
+    stream
+        .write_fmt(format_args!("Hello, {}!\n", name))
+        .unwrap();
+    stream.flush()?;
 
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                std::thread::spawn(|| handle_client_connection(stream));
+    let mut pos = 0;
+    loop {
+        {
+            let lines = arc.read().unwrap();
+            println!("DEBUG arc.read() => {:?}", lines);
+            for i in pos..lines.len() {
+                stream.write_fmt(format_args!("{}", lines[i]))?;
+                pos = lines.len();
             }
-            Err(e) => {
-                eprintln!("Failed to establish connection: {}", e);
-            }
+        }
+        stream.write(b" > ").unwrap();
+        stream.flush()?;
+
+        let mut reads = String::new();
+        stream.read_line(&mut reads).unwrap(); //TODO: non-blocking read
+        if reads.trim().len() != 0 {
+            println!("DEBUG: reads len =>>>>> {}", reads.len());
+            chan.send(format!("[{}] said: {}", name, reads)).unwrap();
+            println!("DEBUG: got '{}' from {}", reads.trim(), name);
         }
     }
 }
 
-fn handle_client_connection(mut stream: TcpStream) -> std::io::Result<()> {
-    println!("Incoming connection from client {}", stream.peer_addr()?);
-    let mut buffer: [u8; 1024] = [0; 1024];
-    loop {
-        let bytes_read: usize = stream.read(&mut buffer)?;
-        if bytes_read == 0 {
-            return Ok(());
+fn main() {
+    let addr: SocketAddr = SocketAddr::from_str("127.0.0.1:5555").unwrap();
+    let listener = TcpListener::bind(addr).unwrap();
+
+    let (send, recv): (Sender<String>, Receiver<String>) = mpsc::channel();
+    let arc: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
+
+    let arc_w = arc.clone();
+
+    std::thread::spawn(move || {
+        loop {
+            let msg = recv.recv().unwrap();
+            print!("DEBUG: msg {}", msg);
+            {
+                let mut arc_w = arc_w.write().unwrap();
+                arc_w.push(msg);
+            } // write lock is released at the end of this scope
         }
-        let msg = match std::str::from_utf8(&buffer[..bytes_read]) {
-            Ok(s) => s,
-            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-        };
-        println!("{:?}", msg);
-        let _ = stream.write(&buffer[..bytes_read]);
+    });
+
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                println!(
+                    "connection from {} to {}",
+                    stream.peer_addr().unwrap(),
+                    stream.local_addr().unwrap()
+                );
+                let send = send.clone();
+                let arc = arc.clone();
+                std::thread::spawn(move || {
+                    let mut stream = BufStream::new(stream);
+                    handle_connection(&mut stream, send, arc);
+                });
+            }
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                println!("a client disconnected");
+                continue;
+            }
+            Err(e) => panic!("encountered IO error: {e}"),
+        }
     }
 }
