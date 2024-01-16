@@ -1,8 +1,10 @@
 use std::io::{Read, Write};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
-use std::sync::{
-    mpsc,
-    mpsc::{Receiver, Sender},
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream},
+    sync::{
+        mpsc,
+        mpsc::{Receiver, Sender},
+    },
 };
 
 fn main() {
