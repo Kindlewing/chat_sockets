@@ -2,10 +2,9 @@ use std::io::{self, ErrorKind, Read, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{self, TryRecvError};
 use std::thread;
-use std::time::Duration;
 
 const LOCAL: &str = "127.0.0.1:5555";
-const MSG_SIZE: usize = 32;
+const MSG_SIZE: usize = 1024;
 
 fn connect_to_server() -> TcpStream {
     TcpStream::connect(LOCAL).expect("Stream failed to connect")
@@ -20,6 +19,10 @@ fn set_nonblocking(stream: &mut TcpStream) {
 fn receive_message(client: &mut TcpStream, rx: &mpsc::Receiver<String>) {
     let mut buff = vec![0; MSG_SIZE];
     match client.read(&mut buff) {
+        Ok(bytes_read) if bytes_read == 0 => {
+            println!("Server disconnected");
+            std::process::exit(0);
+        }
         Ok(_) => {
             let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
             let msg_string: String = match String::from_utf8(msg) {
@@ -43,6 +46,7 @@ fn receive_message(client: &mut TcpStream, rx: &mpsc::Receiver<String>) {
             let mut buff = msg.clone().into_bytes();
             buff.resize(MSG_SIZE, 0);
             client.write_all(&buff).expect("writing to socket failed");
+            client.flush().expect("Writing failed");
             println!("message sent {:?}", msg);
         }
         Err(TryRecvError::Empty) => (),
@@ -56,7 +60,7 @@ fn main_loop(tx: mpsc::Sender<String>) {
         io::stdin()
             .read_line(&mut buff)
             .expect("reading from stdin failed");
-        let msg = buff.trim().to_string();
+        let msg = buff.trim().to_string() + "\n";
         if msg == ":quit" || tx.send(msg).is_err() {
             break;
         }
@@ -71,7 +75,6 @@ fn main() {
 
     thread::spawn(move || loop {
         receive_message(&mut client, &rx);
-        thread::sleep(Duration::from_millis(100));
     });
     main_loop(tx);
     println!("bye bye!");

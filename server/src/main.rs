@@ -14,12 +14,16 @@ fn handle_connection(
     chan: Sender<String>,
     arc: Arc<RwLock<Vec<String>>>,
 ) -> std::io::Result<()> {
-    stream.write(b"Welcome to Simple Chat Server!\n")?;
+    stream.write(b"Welcome to Simple Chat Server! ")?;
     stream.write(b"Please input yourname: ")?;
     stream.flush()?;
     let mut name = String::new();
-    stream.read_line(&mut name).unwrap();
+    if let Err(err) = stream.read_line(&mut name) {
+        eprintln!("Error reading line: {}", err);
+        return Err(err);
+    }
     let name = name.trim_end();
+    println!("Name: {}", name);
     stream
         .write_fmt(format_args!("Hello, {}!\n", name))
         .unwrap();
@@ -33,8 +37,8 @@ fn handle_connection(
             println!("DEBUG arc.read() => {:?}", lines);
             for i in pos..lines.len() {
                 stream.write_fmt(format_args!("{}", lines[i]))?;
-                pos = lines.len();
             }
+            pos = lines.len();
         }
         stream.write(b" > ").unwrap();
         stream.flush()?;
