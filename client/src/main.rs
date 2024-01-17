@@ -16,9 +16,10 @@ fn set_nonblocking(stream: &mut TcpStream) {
         .expect("failed to initiate non-blocking");
 }
 
-fn receive_message(client: &mut TcpStream, rx: &mpsc::Receiver<String>) {
+fn receive_message(server: &mut TcpStream, rx: &mpsc::Receiver<String>) {
     let mut buff = vec![0; MSG_SIZE];
-    match client.read(&mut buff) {
+
+    match server.read(&mut buff) {
         Ok(bytes_read) if bytes_read == 0 => {
             println!("Server disconnected");
             std::process::exit(0);
@@ -36,17 +37,19 @@ fn receive_message(client: &mut TcpStream, rx: &mpsc::Receiver<String>) {
         }
         Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
         Err(_) => {
-            println!("connection with server was severed");
+            println!("Connection with server was severed");
             std::process::exit(1);
         }
     }
+}
 
+fn send_message(server: &mut TcpStream, rx: &mpsc::Receiver<String>) {
     match rx.try_recv() {
         Ok(msg) => {
             let mut buff = msg.clone().into_bytes();
             buff.resize(MSG_SIZE, 0);
-            client.write_all(&buff).expect("writing to socket failed");
-            client.flush().expect("Writing failed");
+            server.write_all(&buff).expect("writing to socket failed");
+            server.flush().expect("Writing failed");
             println!("message sent {}", msg);
         }
         Err(TryRecvError::Empty) => (),
@@ -68,13 +71,14 @@ fn main_loop(tx: mpsc::Sender<String>) {
 }
 
 fn main() {
-    let mut client = connect_to_server();
-    set_nonblocking(&mut client);
+    let mut server = connect_to_server();
+    set_nonblocking(&mut server);
 
     let (tx, rx) = mpsc::channel::<String>();
 
     thread::spawn(move || loop {
-        receive_message(&mut client, &rx);
+        receive_message(&mut server, &rx);
+        send_message(&mut server, &rx)
     });
     main_loop(tx);
     println!("bye bye!");
