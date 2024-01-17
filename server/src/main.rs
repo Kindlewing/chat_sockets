@@ -17,6 +17,20 @@ fn write_from_server(
     stream.write(server_msg.as_bytes())
 }
 
+fn send_message_to_client(
+    arc: &Arc<RwLock<Vec<String>>>,
+    pos: &mut usize,
+    stream: &mut BufStream<TcpStream>,
+) -> std::io::Result<()> {
+    let lines = arc.read().unwrap();
+    for i in *pos..lines.len() {
+        println!("Writing line: {}", lines[i]);
+        stream.write_fmt(format_args!("{}", lines[i]))?;
+    }
+    *pos = lines.len();
+    Ok(())
+}
+
 fn handle_connection(
     stream: &mut BufStream<TcpStream>,
     chan: Sender<String>,
@@ -31,37 +45,25 @@ fn handle_connection(
         return Err(err);
     }
     let name = name.trim_end();
-    println!("Name: {}", name);
-    stream
-        .write_fmt(format_args!("Hello, {}!\n", name))
-        .unwrap();
+    write_from_server(stream, &format!("Hello, {}!\n\n", name))?;
     stream.flush()?;
 
     let mut pos = 0;
     loop {
+        stream.write(b"> ".)?;
+        stream.flush()?;
         let bytes_read = stream.read_line(&mut String::new())?;
+
         if bytes_read == 0 {
             println!("Client disconnected: {}", name);
             break Ok(());
         }
-        {
-            println!("Inside chat loop");
-            let lines = arc.read().unwrap();
-            println!("DEBUG arc.read() => {:?}", lines);
-            for i in pos..lines.len() {
-                stream.write_fmt(format_args!("{}", lines[i]))?;
-            }
-            pos = lines.len();
-        }
-        stream.write(b" > ").unwrap();
-        stream.flush()?;
+        send_message_to_client(&arc, &mut pos, stream)?;
 
         let mut reads = String::new();
-        stream.read_line(&mut reads).unwrap(); //TODO: non-blocking read
+        stream.read_line(&mut reads).unwrap(); // TODO: non-blocking read
         if reads.trim().len() != 0 {
-            println!("DEBUG: reads len =>>>>> {}", reads.len());
             chan.send(format!("[{}] said: {}", name, reads)).unwrap();
-            println!("DEBUG: got '{}' from {}", reads.trim(), name);
         }
     }
 }
