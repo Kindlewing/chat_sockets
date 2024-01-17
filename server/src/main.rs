@@ -9,13 +9,21 @@ use std::sync::{
     Arc, RwLock,
 };
 
+fn write_from_server(
+    stream: &mut BufStream<TcpStream>,
+    buffer: &str,
+) -> Result<usize, std::io::Error> {
+    let server_msg = format!("[SERVER]  {}\n", buffer);
+    stream.write(server_msg.as_bytes())
+}
+
 fn handle_connection(
     stream: &mut BufStream<TcpStream>,
     chan: Sender<String>,
     arc: Arc<RwLock<Vec<String>>>,
 ) -> std::io::Result<()> {
-    stream.write(b"Welcome to Simple Chat Server! ")?;
-    stream.write(b"Please input yourname: ")?;
+    write_from_server(stream, "Welcome to Simple Chat Server! ")?;
+    write_from_server(stream, "Please input yourname: ")?;
     stream.flush()?;
     let mut name = String::new();
     if let Err(err) = stream.read_line(&mut name) {
@@ -31,6 +39,11 @@ fn handle_connection(
 
     let mut pos = 0;
     loop {
+        let bytes_read = stream.read_line(&mut String::new())?;
+        if bytes_read == 0 {
+            println!("Client disconnected: {}", name);
+            break Ok(());
+        }
         {
             println!("Inside chat loop");
             let lines = arc.read().unwrap();

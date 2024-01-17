@@ -32,7 +32,7 @@ fn receive_message(client: &mut TcpStream, rx: &mpsc::Receiver<String>) {
                     err.to_string()
                 }
             };
-            println!("message recv {:?}", msg_string);
+            println!("{msg_string}");
         }
         Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
         Err(_) => {
@@ -47,7 +47,7 @@ fn receive_message(client: &mut TcpStream, rx: &mpsc::Receiver<String>) {
             buff.resize(MSG_SIZE, 0);
             client.write_all(&buff).expect("writing to socket failed");
             client.flush().expect("Writing failed");
-            println!("message sent {:?}", msg);
+            println!("message sent {}", msg);
         }
         Err(TryRecvError::Empty) => (),
         Err(TryRecvError::Disconnected) => std::process::exit(1),
