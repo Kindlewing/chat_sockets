@@ -4,20 +4,9 @@ use std::sync::mpsc::{self, TryRecvError};
 use std::thread;
 
 const LOCAL: &str = "127.0.0.1:5555";
-const MSG_SIZE: usize = 1024;
 
-fn connect_to_server() -> TcpStream {
-    TcpStream::connect(LOCAL).expect("Stream failed to connect")
-}
-
-fn set_nonblocking(stream: &mut TcpStream) {
-    stream
-        .set_nonblocking(true)
-        .expect("failed to initiate non-blocking");
-}
-
-fn receive_message(server: &mut TcpStream, rx: &mpsc::Receiver<String>) {
-    let mut buff = vec![0; MSG_SIZE];
+fn receive_message(server: &mut TcpStream) {
+    let mut buff: Vec<u8> = vec![0; 1024];
 
     match server.read(&mut buff) {
         Ok(bytes_read) if bytes_read == 0 => {
@@ -47,7 +36,7 @@ fn send_message(server: &mut TcpStream, rx: &mpsc::Receiver<String>) {
     match rx.try_recv() {
         Ok(msg) => {
             let mut buff = msg.clone().into_bytes();
-            buff.resize(MSG_SIZE, 0);
+            buff.resize(1024, 0);
             server.write_all(&buff).expect("writing to socket failed");
             server.flush().expect("Writing failed");
             println!("message sent {}", msg);
@@ -71,13 +60,15 @@ fn main_loop(tx: mpsc::Sender<String>) {
 }
 
 fn main() {
-    let mut server = connect_to_server();
-    set_nonblocking(&mut server);
+    let mut server = TcpStream::connect(LOCAL).expect("Stream failed to connect");
+    server
+        .set_nonblocking(true)
+        .expect("failed to initiate non-blocking");
 
     let (tx, rx) = mpsc::channel::<String>();
 
     thread::spawn(move || loop {
-        receive_message(&mut server, &rx);
+        receive_message(&mut server);
         send_message(&mut server, &rx)
     });
     main_loop(tx);
